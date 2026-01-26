@@ -6,7 +6,7 @@ const app = express();
 // middlewares
 app.use(cors({
    origin: [
-      // "http://localhost:5173", // local frontend
+      "http://localhost:5173", // local frontend
       "https://codex-frontend-portfolio-i3bd.vercel.app/" // deployed frontend
     ], // frontend URL
   credentials: true, // allow cookies / auth headers
