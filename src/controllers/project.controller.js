@@ -4,14 +4,30 @@ import cloudinary from "../config/cloudinary.js";
 // CREATE PROJECT
 export const createProject = async (req, res) => {
   try {
-    // console.log("=== DEBUG START ===");
-    console.log("REQ BODY:", req.body);   // form fields
-    console.log("REQ FILE:", req.file);   // uploaded file object
+    console.log("REQ BODY:", req.body);
+    console.log("REQ FILE:", req.file);
 
-    const { title, description, techStack, githubLink, liveLink } = req.body;
+    let { title, description, techStack, category, githubLink, liveLink } = req.body;
 
     if (!title || !description) {
       return res.status(400).json({ message: "Title and Description required" });
+    }
+
+    // 🔹 FormData parsing fix
+    if (techStack && typeof techStack === "string") {
+      try {
+        techStack = JSON.parse(techStack);
+      } catch {
+        techStack = techStack.split(",").map((t) => t.trim()).filter(Boolean);
+      }
+    }
+
+    if (category && typeof category === "string") {
+      try {
+        category = JSON.parse(category);
+      } catch {
+        category = category.trim().toLowerCase();
+      }
     }
 
     let imageData = {};
@@ -26,22 +42,19 @@ export const createProject = async (req, res) => {
         url: upload.secure_url,
         public_id: upload.public_id,
       };
-    } else {
-      console.log("No file received in req.file");
     }
 
     const project = await Project.create({
       title,
       description,
-      techStack: techStack?.split(","),
+      techStack: techStack || [],
+      category: category || "uncategorized",
       githubLink,
       liveLink,
       image: imageData,
     });
 
     console.log("Project created:", project);
-    // console.log("=== DEBUG END ===");
-
     res.status(201).json({ success: true, project });
   } catch (error) {
     console.error("ERROR IN CREATE PROJECT:", error);
@@ -49,7 +62,7 @@ export const createProject = async (req, res) => {
   }
 };
 
-// GET ALL PROJECTS (Public)
+// GET ALL PROJECTS
 export const getProjects = async (req, res) => {
   try {
     const projects = await Project.find().sort({ createdAt: -1 });
@@ -60,26 +73,17 @@ export const getProjects = async (req, res) => {
   }
 };
 
-
 // UPDATE PROJECT
 export const updateProject = async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
+    if (!project) return res.status(404).json({ message: "Project not found" });
 
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
-    }
-
-    // agar nayi image aayi
     if (req.file) {
-      console.log("Replacing image...");
-
-      // old image delete
       if (project.image?.public_id) {
         await cloudinary.uploader.destroy(project.image.public_id);
       }
 
-      // new image upload
       const result = await cloudinary.uploader.upload(req.file.path, {
         folder: "mern-portfolio/projects",
       });
@@ -90,24 +94,38 @@ export const updateProject = async (req, res) => {
       };
     }
 
-    // text fields update
-    project.title = req.body.title || project.title;
-    project.description = req.body.description || project.description;
-    project.techStack = req.body.techStack
-      ? req.body.techStack.split(",")
-      : project.techStack;
-    project.githubLink = req.body.githubLink || project.githubLink;
-    project.liveLink = req.body.liveLink || project.liveLink;
+    let { title, description, techStack, category, githubLink, liveLink } = req.body;
+
+    if (techStack && typeof techStack === "string") {
+      try {
+        techStack = JSON.parse(techStack);
+      } catch {
+        techStack = techStack.split(",").map((t) => t.trim()).filter(Boolean);
+      }
+    }
+
+    if (category && typeof category === "string") {
+      try {
+        category = JSON.parse(category);
+      } catch {
+        category = category.trim().toLowerCase();
+      }
+    }
+
+    project.title = title || project.title;
+    project.description = description || project.description;
+    project.techStack = techStack || project.techStack;
+    project.category = category || project.category;
+    project.githubLink = githubLink || project.githubLink;
+    project.liveLink = liveLink || project.liveLink;
 
     await project.save();
-
     res.status(200).json(project);
   } catch (error) {
     console.error("UPDATE ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // DELETE PROJECT
 export const deleteProject = async (req, res) => {
@@ -116,7 +134,6 @@ export const deleteProject = async (req, res) => {
     if (!project) return res.status(404).json({ message: "Project not found" });
 
     if (project.image?.public_id) {
-      console.log("Deleting image from Cloudinary:", project.image.public_id);
       await cloudinary.uploader.destroy(project.image.public_id);
     }
 
